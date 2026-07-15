@@ -1,11 +1,6 @@
 #include "fuzzy_logic.h"
 #include <math.h>
 
-// 절대값 매크로
-#ifndef ABS
-#define ABS(x) ((x) > 0 ? (x) : -(x))
-#endif
-
 // 사다리꼴 멤버십 함수
 static float Fuzzy_Trapezoid(float x, float a, float b)
 {
@@ -21,7 +16,7 @@ uint8_t Compute_Integrated_Risk(uint8_t perclos, float steer_std, float hands_of
     float risk_eye   = Fuzzy_Trapezoid((float)perclos, 40.0f, 60.0f);
     float risk_steer = Fuzzy_Trapezoid(steer_std, 20.0f, 40.0f);
     float risk_hands = Fuzzy_Trapezoid(hands_off_sec, 2.0f, 5.0f);
-    float risk_head  = Fuzzy_Trapezoid(ABS(head_delta), 8.0f, 15.0f);
+    float risk_head  = Fuzzy_Trapezoid(fabsf(head_delta), 8.0f, 15.0f);
     float risk_noop  = Fuzzy_Trapezoid(no_op_sec, 5.0f, 10.0f) * 0.8f; // 최대 80점(Warning) 제한
 
     // [Step 2] Rule Evaluation (눈부심 방지)
@@ -35,17 +30,12 @@ uint8_t Compute_Integrated_Risk(uint8_t perclos, float steer_std, float hands_of
     }
 
     // [Step 3] Defuzzification (MAX Rule)
-    // 그룹 1: 만성 졸음 (눈, 핸들흔들림, 무조작)
-    float risk_slow = risk_steer;
-    if (risk_noop  > risk_slow) risk_slow = risk_noop;
-    if (risk_eye > risk_slow) risk_slow = risk_eye;
-
-    // 그룹 2: 급박한 위험 (손뗌, 고개숙임)
-    float risk_fast = risk_hands;
-    if (risk_head > risk_fast) risk_fast = risk_head;
-
-    // 최종: 둘 중 더 위험한 것 선택
-    float final_risk = (risk_slow > risk_fast) ? risk_slow : risk_fast;
-
+    // 눈, 핸들흔들림, 무조작, 손뗌, 고개숙임 중 가장 큰 값 선택
+    float final_risk = risk_steer;
+    if(risk_eye     > final_risk) final_risk = risk_eye;
+    if(risk_hands   > final_risk) final_risk = risk_hands;
+    if(risk_noop    > final_risk) final_risk = risk_noop;
+    if(risk_head    > final_risk) final_risk = risk_head;
+ 
     return (uint8_t)(final_risk * 100.0f);
 }
