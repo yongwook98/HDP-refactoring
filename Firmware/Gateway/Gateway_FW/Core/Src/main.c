@@ -615,9 +615,8 @@ void Update_System_State()
 
     float current_angle = chassis_data_local.steering_angle;
     // 변화량 계산 (ABS 매크로 사용)
-    float angle_diff = current_angle - prev_steering_angle;
+    float angle_diff = fabsf(current_angle - prev_steering_angle);
 
-    if (angle_diff < 0) angle_diff = -angle_diff;
 
     // 변화량이 2.0도 미만이면 무조작으로 간주
     if (angle_diff < 2.0f)
