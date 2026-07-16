@@ -30,6 +30,7 @@
 
 // [테스트 스위치] 이 줄이 있으면 테스트 모드, 주석(//) 처리하면 정상 모드
 //#define CPU_TEST_MODE
+#define MOCK_CAN_TEST
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -93,6 +94,7 @@ static void MX_USART3_UART_Init(void);
 /* USER CODE BEGIN PFP */
 void Update_System_State();
 extern void Run_ASPICE_Unit_Tests(void);
+void Send_Mock_CAN_Data(void);
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
@@ -318,13 +320,14 @@ static void MX_CAN_Init(void)
   /* USER CODE END CAN_Init 1 */
   hcan.Instance = CAN1;
   hcan.Init.Prescaler = 4;
-#ifdef CPU_TEST_MODE
-  // 테스트 모드일 때는 루프백 (혼자 테스트)
+
+#if defined(CPU_TEST_MODE) || defined(MOCK_CAN_TEST)
   hcan.Init.Mode = CAN_MODE_LOOPBACK;
 #else
-  // 평소에는 노말 (외부 연결)
   hcan.Init.Mode = CAN_MODE_NORMAL;
 #endif
+
+
   hcan.Init.SyncJumpWidth = CAN_SJW_1TQ;
   hcan.Init.TimeSeg1 = CAN_BS1_13TQ;
   hcan.Init.TimeSeg2 = CAN_BS2_2TQ;
@@ -682,6 +685,10 @@ void Update_System_State()
                 chassis_data_local.steering_std_dev,
                 no_op_sec
                 );
+}
+
+void Send_Mock_CAN_Data(){
+
 }
 
 // UART 에러 발생 시(노이즈 등) 호출됨 -> 에러 풀고 수신 다시 켜기
