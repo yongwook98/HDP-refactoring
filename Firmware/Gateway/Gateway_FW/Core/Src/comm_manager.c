@@ -1,4 +1,5 @@
 #include "comm_manager.h"
+#include <string.h>
 
 // 실제 변수 메모리 할당
 VisionData_t  vision_data  	= {0};
