@@ -27,6 +27,7 @@
 #include <comm_manager.h>
 #include <stdio.h>
 #include <string.h>
+#include <math.h>
 #include "unity.h"
 
 // [테스트 스위치] 이 줄이 있으면 테스트 모드, 주석(//) 처리하면 정상 모드
