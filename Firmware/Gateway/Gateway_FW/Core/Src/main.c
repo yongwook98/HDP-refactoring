@@ -70,7 +70,6 @@ UART_HandleTypeDef huart3;
 
 volatile uint8_t timer_100ms_flag = 0;
 
-// 전역 변수로 선언
 DashboardPacket_t tx_packet;
 
 SystemState_t current_state = STATE_NORMAL;
