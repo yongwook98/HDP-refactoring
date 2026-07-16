@@ -688,6 +688,46 @@ void Update_System_State()
 }
 
 void Send_Mock_CAN_Data(){
+	CAN_TxHeaderTypeDef TxHeader;
+	uint8_t TxData[8] = {0};
+	uint32_t TxMailBox;
+	static uint_8 mock_alive = 0;
+
+	// 가상 chassis 노드 데이터 생성．
+	TxHeader.StdId = 0x201;
+	TxHeader.RTR = CAN_RTR_DATA;
+	TxHeader.IDE = CAN_ID_STD;
+	TxHeader.DLC = 8;
+
+	// 조향 표준 편차
+	uint16_t raw_std = 150;
+	TxData[0] = raw_std & 0xFF;
+	TxData[1] = (raw_std >> 8) & 0xFF;
+
+	// 조향각
+	int16_t raw_angle = 105;
+	TxData[2] = raw_angle & 0xFF;
+	TxData[3] = (raw_angle >> 8) & 0xFF;
+
+	// alive counter 설정
+	TxData[7] = mock_alive & 0xFF;
+
+	// can 데이터 송신
+	HAL_CAN_AddTxMessage(&hcan, &TxHeader, TxData, &TxMailBox);
+
+	// 가상 body 노드 데이터 생성
+	TxHeader.StdId = 0x301;
+	TxHeader.DLC = 8;
+
+	// 머리 변위량
+	TxData[0] = 3;
+
+	// 손 뗀 시간
+	TxData[1] = 5;
+
+	TxData[7] = mock_alive & 0x0F;
+
+	HAL_CAN_AddTxMessage(&hcan, &TxHeader, Txdata, &TxMailBox);
 
 }
 
