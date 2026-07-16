@@ -576,36 +576,21 @@ void HAL_CAN_RxFifo0MsgPendingCallback(CAN_HandleTypeDef *hcan)
 
 void Update_System_State()
 {
-	// 1. 데이터 스냅샷(Snapshot)을 위한 로컬 변수 선언
 	VisionData_t  vision_data_local;
 	ChassisData_t chassis_data_local;
 	BodyData_t    body_data_local;
 
-	// 2. 크리티컬 섹션 (Critical Section): 인터럽트 잠시 중단
-//	__disable_irq();
+	__disable_irq();
 
-    // 3. 전역 변수 값을 로컬 변수로 안전하게 복사
 	vision_data_local  = vision_data;
 	chassis_data_local = chassis_data;
 	body_data_local = body_data;
 
-    // 4. 인터럽트 다시 허용
-//    __enable_irq();
-
-    // -----------------------------------------------------------
-    // 이제부터는 전역변수 대신 로컬 변수(_local)만 사용합니다.
-    // -----------------------------------------------------------
-
+    __enable_irq();
 
     // 비전, 섀시, 바디에서 에러 플래그가 하나라도 0이 아니면 고장 처리
     if (vision_data_local.is_face_detected != 1 || chassis_data_local.err_flag != 0 || body_data_local.err_flag != 0)
     {
-//        printf("body_err_flag : %d vision_err_flag : %d chassis_err_flag : %d"
-//        		" 🔧 SENSOR ERROR DETECTED! (Fail-Safe Mode)\r\n",
-//        		body_data_local.err_flag,
-//				vision_data_local.err_flag,
-//				chassis_data_local.err_flag);
-
         current_state = STATE_FAULT;
 
         DMS_Send_Control_Signal(&huart3, STATE_FAULT, 1, 1);
@@ -614,11 +599,8 @@ void Update_System_State()
     }
 
     float current_angle = chassis_data_local.steering_angle;
-    // 변화량 계산 (ABS 매크로 사용)
     float angle_diff = fabsf(current_angle - prev_steering_angle);
 
-
-    // 변화량이 2.0도 미만이면 무조작으로 간주
     if (angle_diff < 2.0f)
     {
         no_op_timer += 100; // 100ms 증가 (루프 주기)
@@ -638,7 +620,7 @@ void Update_System_State()
     }
     else
     {
-        safe_perclos = 0; // 얼굴 없으면 0점 (위험도 계산에서 제외됨)
+        safe_perclos = 0;
     }
 
     // ms -> sec 변환
