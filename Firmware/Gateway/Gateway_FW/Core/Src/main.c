@@ -26,10 +26,13 @@
 #include <fuzzy_logic.h>
 #include <comm_manager.h>
 #include <stdio.h>
+#include <string.h>
+#include <math.h>
 #include "unity.h"
 
 // [테스트 스위치] 이 줄이 있으면 테스트 모드, 주석(//) 처리하면 정상 모드
 //#define CPU_TEST_MODE
+#define MOCK_CAN_TEST
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -93,6 +96,7 @@ static void MX_USART3_UART_Init(void);
 /* USER CODE BEGIN PFP */
 void Update_System_State();
 extern void Run_ASPICE_Unit_Tests(void);
+void Send_Mock_CAN_Data(void);
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
@@ -196,6 +200,10 @@ int main(void)
 	  if (timer_100ms_flag == 1)
 	  {
 		  timer_100ms_flag = 0;
+
+#ifdef MOCK_CAN_TEST
+		  Send_Mock_CAN_Data();
+#endif
 
 		  Update_System_State();
 
@@ -318,13 +326,14 @@ static void MX_CAN_Init(void)
   /* USER CODE END CAN_Init 1 */
   hcan.Instance = CAN1;
   hcan.Init.Prescaler = 4;
-#ifdef CPU_TEST_MODE
-  // 테스트 모드일 때는 루프백 (혼자 테스트)
+
+#if defined(CPU_TEST_MODE) || defined(MOCK_CAN_TEST)
   hcan.Init.Mode = CAN_MODE_LOOPBACK;
 #else
-  // 평소에는 노말 (외부 연결)
   hcan.Init.Mode = CAN_MODE_NORMAL;
 #endif
+
+
   hcan.Init.SyncJumpWidth = CAN_SJW_1TQ;
   hcan.Init.TimeSeg1 = CAN_BS1_13TQ;
   hcan.Init.TimeSeg2 = CAN_BS2_2TQ;
@@ -576,36 +585,21 @@ void HAL_CAN_RxFifo0MsgPendingCallback(CAN_HandleTypeDef *hcan)
 
 void Update_System_State()
 {
-	// 1. 데이터 스냅샷(Snapshot)을 위한 로컬 변수 선언
 	VisionData_t  vision_data_local;
 	ChassisData_t chassis_data_local;
 	BodyData_t    body_data_local;
 
-	// 2. 크리티컬 섹션 (Critical Section): 인터럽트 잠시 중단
-//	__disable_irq();
+	__disable_irq();
 
-    // 3. 전역 변수 값을 로컬 변수로 안전하게 복사
 	vision_data_local  = vision_data;
 	chassis_data_local = chassis_data;
 	body_data_local = body_data;
 
-    // 4. 인터럽트 다시 허용
-//    __enable_irq();
-
-    // -----------------------------------------------------------
-    // 이제부터는 전역변수 대신 로컬 변수(_local)만 사용합니다.
-    // -----------------------------------------------------------
-
+    __enable_irq();
 
     // 비전, 섀시, 바디에서 에러 플래그가 하나라도 0이 아니면 고장 처리
     if (vision_data_local.is_face_detected != 1 || chassis_data_local.err_flag != 0 || body_data_local.err_flag != 0)
     {
-//        printf("body_err_flag : %d vision_err_flag : %d chassis_err_flag : %d"
-//        		" 🔧 SENSOR ERROR DETECTED! (Fail-Safe Mode)\r\n",
-//        		body_data_local.err_flag,
-//				vision_data_local.err_flag,
-//				chassis_data_local.err_flag);
-
         current_state = STATE_FAULT;
 
         DMS_Send_Control_Signal(&huart3, STATE_FAULT, 1, 1);
@@ -614,12 +608,8 @@ void Update_System_State()
     }
 
     float current_angle = chassis_data_local.steering_angle;
-    // 변화량 계산 (ABS 매크로 사용)
-    float angle_diff = current_angle - prev_steering_angle;
+    float angle_diff = fabsf(current_angle - prev_steering_angle);
 
-    if (angle_diff < 0) angle_diff = -angle_diff;
-
-    // 변화량이 2.0도 미만이면 무조작으로 간주
     if (angle_diff < 2.0f)
     {
         no_op_timer += 100; // 100ms 증가 (루프 주기)
@@ -639,7 +629,7 @@ void Update_System_State()
     }
     else
     {
-        safe_perclos = 0; // 얼굴 없으면 0점 (위험도 계산에서 제외됨)
+        safe_perclos = 0;
     }
 
     // ms -> sec 변환
@@ -701,6 +691,56 @@ void Update_System_State()
                 chassis_data_local.steering_std_dev,
                 no_op_sec
                 );
+}
+
+void Send_Mock_CAN_Data(){
+	CAN_TxHeaderTypeDef TxHeader;
+	uint8_t TxData[8] = {0};
+	uint32_t TxMailBox;
+	static uint8_t mock_alive = 0;
+
+	// 가상 chassis 노드 데이터 생성．
+	TxHeader.StdId = 0x201;
+	TxHeader.RTR = CAN_RTR_DATA;
+	TxHeader.IDE = CAN_ID_STD;
+	TxHeader.DLC = 8;
+
+	// 조향 표준 편차
+	uint16_t raw_std = 150;
+	TxData[0] = raw_std & 0xFF;
+	TxData[1] = (raw_std >> 8) & 0xFF;
+
+	// 조향각
+	int16_t raw_angle = 105;
+	TxData[2] = raw_angle & 0xFF;
+	TxData[3] = (raw_angle >> 8) & 0xFF;
+
+	// alive counter 설정
+	TxData[7] = mock_alive & 0x0F;
+
+	// 섀시 데이터 송신
+	HAL_CAN_AddTxMessage(&hcan, &TxHeader, TxData, &TxMailBox);
+
+	memset(TxData, 0, sizeof(TxData));
+
+	// 가상 body 노드 데이터 생성
+	TxHeader.StdId = 0x301;
+	TxHeader.DLC = 8;
+
+	// 머리 변위량
+	TxData[0] = 3;
+
+	// 손 뗀 시간
+	TxData[1] = 5;
+
+	// alive counter 설정
+	TxData[7] = mock_alive & 0x0F;
+
+	// 바디 데이터 송신
+	HAL_CAN_AddTxMessage(&hcan, &TxHeader, TxData, &TxMailBox);
+
+	mock_alive = (mock_alive + 1) % 16;
+
 }
 
 // UART 에러 발생 시(노이즈 등) 호출됨 -> 에러 풀고 수신 다시 켜기

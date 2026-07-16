@@ -1,4 +1,5 @@
 #include "comm_manager.h"
+#include <string.h>
 
 // 실제 변수 메모리 할당
 VisionData_t  vision_data  	= {0};
@@ -85,9 +86,6 @@ void DMS_Send_Control_Signal(UART_HandleTypeDef *huart, SystemState_t state, uin
     // 0:Normal, 1:Warning, 2:Danger, 3:Fault
     tx_packet[2] = (uint8_t)state;
 
-    // 테스트코드
-    tx_packet[2] = 1;
-
     // --------------------------------------------------------
     // [Payload Byte 1] MRM_Trigger (Bit 0) -> tx_packet[3]
     // --------------------------------------------------------
@@ -108,10 +106,7 @@ void DMS_Send_Control_Signal(UART_HandleTypeDef *huart, SystemState_t state, uin
     // Alive Count 증가
     gateway_alive_cnt = (gateway_alive_cnt + 1) % 16;
 
-    for(int i=0; i<10; i++)
-    {
-    	g_last_tx_packet[i] = tx_packet[i];
-    }
+    memcpy(g_last_tx_packet, tx_packet, 10);
 
     // --------------------------------------------------------
     // [전송] UART Transmit (총 10 Bytes)
