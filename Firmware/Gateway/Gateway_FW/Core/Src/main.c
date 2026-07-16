@@ -691,7 +691,7 @@ void Send_Mock_CAN_Data(){
 	CAN_TxHeaderTypeDef TxHeader;
 	uint8_t TxData[8] = {0};
 	uint32_t TxMailBox;
-	static uint_8 mock_alive = 0;
+	static uint8_t mock_alive = 0;
 
 	// 가상 chassis 노드 데이터 생성．
 	TxHeader.StdId = 0x201;
@@ -727,7 +727,7 @@ void Send_Mock_CAN_Data(){
 
 	TxData[7] = mock_alive & 0x0F;
 
-	HAL_CAN_AddTxMessage(&hcan, &TxHeader, Txdata, &TxMailBox);
+	HAL_CAN_AddTxMessage(&hcan, &TxHeader, TxData, &TxMailBox);
 
 }
 
