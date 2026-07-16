@@ -26,6 +26,7 @@
 #include <fuzzy_logic.h>
 #include <comm_manager.h>
 #include <stdio.h>
+#include <string.h>
 #include "unity.h"
 
 // [테스트 스위치] 이 줄이 있으면 테스트 모드, 주석(//) 처리하면 정상 모드
@@ -198,6 +199,10 @@ int main(void)
 	  if (timer_100ms_flag == 1)
 	  {
 		  timer_100ms_flag = 0;
+
+#ifdef MOCK_CAN_TEST
+		  Send_Mock_CAN_Data();
+#endif
 
 		  Update_System_State();
 
@@ -710,10 +715,12 @@ void Send_Mock_CAN_Data(){
 	TxData[3] = (raw_angle >> 8) & 0xFF;
 
 	// alive counter 설정
-	TxData[7] = mock_alive & 0xFF;
+	TxData[7] = mock_alive & 0x0F;
 
-	// can 데이터 송신
+	// 섀시 데이터 송신
 	HAL_CAN_AddTxMessage(&hcan, &TxHeader, TxData, &TxMailBox);
+
+	memset(TxData, 0, sizeof(TxData));
 
 	// 가상 body 노드 데이터 생성
 	TxHeader.StdId = 0x301;
@@ -725,9 +732,13 @@ void Send_Mock_CAN_Data(){
 	// 손 뗀 시간
 	TxData[1] = 5;
 
+	// alive counter 설정
 	TxData[7] = mock_alive & 0x0F;
 
+	// 바디 데이터 송신
 	HAL_CAN_AddTxMessage(&hcan, &TxHeader, TxData, &TxMailBox);
+
+	mock_alive = (mock_alive + 1) % 16;
 
 }
 
