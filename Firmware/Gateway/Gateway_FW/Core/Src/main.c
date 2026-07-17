@@ -179,6 +179,9 @@ int main(void)
 
 	#ifdef CPU_TEST_MODE
 	  printf("⚠️ TEST MODE: CPU Load Test Started (Loopback)\r\n");
+
+	#elif defined(MOCK_CAN_TEST)
+	  printf("mock can test mode started\r\n");
 	#else
 	  printf("system start...\r\n");
 	#endif
@@ -603,6 +606,8 @@ void Update_System_State()
 
         DMS_Send_Control_Signal(&huart3, STATE_FAULT, 1, 1);
 
+        printf("error");
+
         return;
     }
 
@@ -708,12 +713,10 @@ void Send_Mock_CAN_Data(){
 	uint16_t raw_std = 150;
 	TxData[0] = raw_std & 0xFF;
 	TxData[1] = (raw_std >> 8) & 0xFF;
-
 	// 조향각
 	int16_t raw_angle = 105;
 	TxData[2] = raw_angle & 0xFF;
 	TxData[3] = (raw_angle >> 8) & 0xFF;
-
 	// alive counter 설정
 	TxData[7] = mock_alive & 0x0F;
 
@@ -725,18 +728,24 @@ void Send_Mock_CAN_Data(){
 	// 가상 body 노드 데이터 생성
 	TxHeader.StdId = 0x301;
 	TxHeader.DLC = 8;
-
 	// 머리 변위량
 	TxData[0] = 3;
-
 	// 손 뗀 시간
 	TxData[1] = 5;
-
 	// alive counter 설정
 	TxData[7] = mock_alive & 0x0F;
 
 	// 바디 데이터 송신
-	HAL_CAN_AddTxMessage(&hcan, &TxHeader, TxData, &TxMailBox);
+	uint8_t state = HAL_CAN_AddTxMessage(&hcan, &TxHeader, TxData, &TxMailBox);
+
+	printf("\n can send state : %d\r\n", state);
+
+	// 비전 데이터 생성
+	vision_data.is_face_detected = 1;
+	vision_data.is_eye_closed = 0;
+	vision_data.perclos = 15;
+	vision_data.err_flag = 0;
+	vision_data.alive_cnt = mock_alive & 0x0F;
 
 	mock_alive = (mock_alive + 1) % 16;
 
