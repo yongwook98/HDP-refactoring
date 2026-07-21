@@ -72,10 +72,7 @@ HDP-refactoring/
 │   │   └── TraceabilityMatrix.xlsx
 │   ├── Design/
 │   │   ├── SW_ARCH_Gateway.md
-│   │   └── SWE3_DetailedDesign/
-│   │       ├── signal_monitor.md
-│   │       ├── diag_manager.md
-│   │       └── wdg_manager.md
+│   │   └── SWE3_DetailedDesign/   # 요구사항 확정 후 모듈별로 채워짐 (파일 구성 미정)
 │   └── QA/
 │       ├── ProblemReportLog.xlsx
 │       ├── ChangeRequestLog.xlsx
@@ -95,11 +92,11 @@ Application Layer
   - State Machine (STATE_NORMAL/WARNING/DANGER/FAULT 전이)
   - Fuzzy Logic (Compute_Integrated_Risk)
 
-Service Layer (아이디어)
+Service Layer 
   - Signal Monitor   : 채널별 alive_cnt 정지 감지 → 타임아웃 시 err_flag 강제 설정
   - Diag Manager     : err_flag/타임아웃 이벤트를 DTC로 기록(Active/History), RAM 저장
 
-BSW Layer (아이디어)
+BSW Layer 
   - Comm Wrapper     : 기존 comm_manager.c (CAN/UART 파싱 + HAL 호출 캡슐화)
   - Wdg Manager      : IWDG 초기화/refresh, 태스크 생존 신고 기반 감시
 
