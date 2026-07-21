@@ -86,113 +86,49 @@ HDP-refactoring/
 - 표 형태가 자연스러운 요구사항/추적성/PR/CR 로그는 xlsx (기존 관례 유지)
 - 서술+다이어그램이 많은 아키텍처/상세설계 문서는 md (git diff 추적 용이)
 
-## 6. SW 아키텍처 (SWE.2)
+## 6. SW 아키텍처 예비 아이디어 (SWE.2 — 확정 아님)
+
+> **주의**: 이 장은 요구사항(SYS.1/SWE.1)이 아직 확정되지 않은 시점에 나온 예비 아이디어다. SWE.2 아키텍처는 원칙적으로 베이스라인이 확정된 SWE.1 요구사항을 입력으로 삼아야 하므로, 이 계층 구조는 **요구사항 확정 후 SWE.1 요구사항 항목과 하나씩 대조하여 재검토·확정**해야 한다. 여기서는 "이런 방향의 계층 분리가 가능하다"는 아이디어 수준으로만 남겨둔다. 세부 모듈 인터페이스·상세설계(舊 SWE.3)는 이 시점에 논하기엔 이르다고 판단해 이번 문서에서 제외했다 — 요구사항 확정 후 별도 브레인스토밍으로 다시 다룬다.
 
 ```
 Application Layer
   - State Machine (STATE_NORMAL/WARNING/DANGER/FAULT 전이)
   - Fuzzy Logic (Compute_Integrated_Risk)
 
-Service Layer (신규)
+Service Layer (아이디어)
   - Signal Monitor   : 채널별 alive_cnt 정지 감지 → 타임아웃 시 err_flag 강제 설정
   - Diag Manager     : err_flag/타임아웃 이벤트를 DTC로 기록(Active/History), RAM 저장
 
-BSW Layer (재구성)
-  - Comm Wrapper     : 기존 comm_manager.c (CAN/UART 파싱 + HAL 호출 캡슐화, 대규모 변경 없음)
-  - Wdg Manager (신규): IWDG 초기화/refresh, 태스크 생존 신고 기반 감시
+BSW Layer (아이디어)
+  - Comm Wrapper     : 기존 comm_manager.c (CAN/UART 파싱 + HAL 호출 캡슐화)
+  - Wdg Manager      : IWDG 초기화/refresh, 태스크 생존 신고 기반 감시
 
 MCAL Layer
   - STM32 HAL (기존 그대로)
 ```
 
-**데이터 흐름 변화**: `Update_System_State()`(100ms 주기)에서 로컬 스냅샷을 뜬 직후, 각 채널의 alive_cnt를 Signal Monitor에 전달 → stale 판정 시 Diag Manager에 통보 → DTC 기록. `current_state == STATE_FAULT` 판단 기준이 "Diag Manager에 Active DTC 존재 여부"로 대체된다.
+## 7. 빌드 관리 방침 (일반론)
 
-## 7. 신규 BSW 모듈 상세설계 (SWE.3)
+- 운영 빌드와 테스트 빌드를 분리 관리한다 (예: CMake 타겟 분리). Mock 데이터 생성이나 부하테스트 같은 테스트 전용 코드가 운영 바이너리에 섞여 들어가지 않도록 한다.
+- 이슈 #4(`CPU_TEST_MODE`/`MOCK_CAN_TEST` 혼재)에 대한 구체적인 해결 방식(타겟 이름, 파일 분리 범위 등)은 요구사항·아키텍처가 확정된 뒤 설계 단계에서 정한다.
 
-### 7.1 Signal Monitor (`signal_monitor.h/.c`)
+## 8. 테스트 방침 (일반론)
 
-```c
-typedef enum { SIG_CH_VISION, SIG_CH_CHASSIS, SIG_CH_BODY, SIG_CH_COUNT } SignalChannel_t;
+- 기존 관례(온타겟 Unity, `Run_ASPICE_Unit_Tests()` 러너)를 유지한다.
+- 신규로 추가되는 기능은 모듈 단위로 테스트 파일을 분리하는 것을 원칙으로 한다.
+- 테스트케이스는 `TraceabilityMatrix.xlsx`에서 대응하는 SWE.1/SWE.3 항목과 연결한다.
+- 구체적인 테스트 파일 구성은 상세설계가 나온 뒤 정한다.
 
-void    SigMon_Init(void);
-void    SigMon_Update(SignalChannel_t ch, uint8_t current_alive_cnt); // 100ms tick마다 호출
-uint8_t SigMon_IsStale(SignalChannel_t ch);
-```
+## 9. 마이그레이션 순서 (개요)
 
-- 채널별로 `alive_cnt`가 바뀌지 않은 연속 tick 수를 카운트, 임계치 초과 시 stale
-- 임계치 기본값: Chassis/Body 300ms(3틱), Vision 500ms(5틱, 카메라 파이프라인 지연 고려)
-
-### 7.2 Diag Manager (`diag_manager.h/.c`)
-
-```c
-typedef enum { DTC_VISION_TIMEOUT, DTC_VISION_FAULT, DTC_CHASSIS_TIMEOUT,
-               DTC_CHASSIS_FAULT, DTC_BODY_TIMEOUT, DTC_BODY_FAULT, DTC_COUNT } DtcId_t;
-typedef enum { DTC_INACTIVE, DTC_ACTIVE, DTC_HISTORY } DtcStatus_t;
-
-void        Diag_Init(void);
-void        Diag_SetActive(DtcId_t id);
-void        Diag_SetHealed(DtcId_t id);
-DtcStatus_t Diag_GetStatus(DtcId_t id);
-uint8_t     Diag_GetActiveCount(void);
-```
-
-- 고정 크기 RAM 테이블(`DTC_COUNT`개), 발생 횟수 카운트 포함
-- 리셋 시 초기화 (RAM 전용 — Flash 영속화는 이번 범위 제외, 결정 근거: 작업량 대비 포트폴리오 목적에는 개념 증명으로 충분)
-
-### 7.3 Wdg Manager (`wdg_manager.h/.c`)
-
-```c
-void WdgM_Init(void);       // IWDG 초기화 (타임아웃 예: 800ms)
-void WdgM_TaskAlive(void);  // Update_System_State 정상 완료 시 호출 (생존 신고)
-void WdgM_Refresh(void);    // 메인 루프에서 매 iteration 호출
-```
-
-- `WdgM_Refresh()`는 마지막 refresh 이후 `WdgM_TaskAlive()` 신고가 있었을 때만 `HAL_IWDG_Refresh()` 호출 — 메인 태스크가 멈추면 watchdog가 갱신되지 않아 MCU가 리셋됨
-
-### 7.4 Comm Wrapper
-
-기존 `comm_manager.c`가 이미 HAL 호출을 캡슐화하고 있어 대규모 리팩토링은 불필요. `Update_System_State()`에서 alive_cnt를 읽어 Signal Monitor로 넘기는 연결만 추가한다.
-
-## 8. 빌드 변형 (CMake)
-
-```
-CMakeLists.txt
-  gateway_release   # 운영 빌드: Mock/Unity 미포함, BSW 3종 전부 활성
-  gateway_test      # 테스트 빌드: Unity + mock_can_data.c + 전체 테스트 스위트 포함
-```
-
-- `main.c`에서 `#ifdef CPU_TEST_MODE` / `#ifdef MOCK_CAN_TEST` 블록 제거
-- `Send_Mock_CAN_Data()`와 CPU 부하테스트 코드는 `Core/Src/mock_can_data.c`로 분리, `gateway_test` 타겟에만 컴파일
-- `gateway_release`는 순수 운영 로직만 포함
-
-## 9. 테스트 전략 (SWE.4)
-
-기존 관례(온타겟 Unity, `Run_ASPICE_Unit_Tests()` 러너)를 유지하며 모듈 분리에 맞춰 테스트 파일을 분리한다.
-
-```
-Core/Src/
-  test_suite.c           # 기존 (Fuzzy Logic, Comm, Integration)
-  test_signal_monitor.c  # 신규: 임계치 경계값(임계치-1, 임계치, 임계치+1) 검증
-  test_diag_manager.c    # 신규: Active→History 전이, 발생횟수 카운팅 검증
-  test_wdg_manager.c     # 신규: TaskAlive 신고 유무에 따른 Refresh 여부 검증
-```
-
-- `Run_ASPICE_Unit_Tests()`가 신규 테스트 3종도 등록하도록 확장, `gateway_test` 빌드에서만 실행
-- 각 테스트케이스 ID는 `TraceabilityMatrix.xlsx`에서 해당 SWE.3 설계 항목과 연결
-
-**디렉토리**: 기존 `Core/Inc`, `Core/Src` 평면 구조를 유지 (새 하위폴더 없음) — 신규 모듈들이 기존 `comm_manager.c`, `fuzzy_logic.c` 옆에 나란히 추가된다.
-
-## 10. 마이그레이션 순서 (개요)
-
-세부 단계는 다음 writing-plans 단계에서 구체화하되, 대략적인 순서는 다음과 같다.
+세부 단계는 다음 writing-plans 단계에서 구체화하되, 대략적인 순서는 다음과 같다. **요구사항 확정과 검토(게이트 통과)가 아키텍처·설계 작업보다 먼저 와야 한다는 원칙**을 반영했다.
 
 1. QA 산출물 골격 작성 (`Docs/QA/*`) — 3장의 6개 이슈를 PR로 등록
 2. SYS1REQ 완성 + SWE1REQ_Gateway 작성 (CR을 통해 반영)
-3. SW_ARCH_Gateway.md 작성 (6장 내용 문서화)
-4. Signal Monitor 구현 + 단위테스트
-5. Diag Manager 구현 + 단위테스트 (Signal Monitor와 연동)
-6. Wdg Manager 구현 + 단위테스트
-7. CMake 빌드 변형 분리, Mock 코드 이동
-8. `Update_System_State()`를 신규 모듈과 연동하도록 리팩토링
-9. TraceabilityMatrix.xlsx 완성 (요구사항↔설계↔코드↔테스트 전체 연결)
-10. QualityGateChecklist 기준 최종 점검
+3. **요구사항 검토 및 베이스라인 확정** (`QualityGateChecklist.md`의 요구사항 게이트 통과) — 이 게이트를 통과하기 전에는 아키텍처/상세설계를 확정하지 않는다
+4. SW_ARCH_Gateway.md 확정 (6장의 예비 아이디어를 확정된 SWE.1 요구사항과 대조하며 재작성)
+5. BSW 모듈별 상세설계(SWE.3) 및 구현 + 단위테스트
+6. 빌드 변형 분리, 테스트 전용 코드 이관
+7. `Update_System_State()`를 신규 모듈과 연동하도록 리팩토링
+8. TraceabilityMatrix.xlsx 완성 (요구사항↔설계↔코드↔테스트 전체 연결)
+9. QualityGateChecklist 기준 최종 점검
