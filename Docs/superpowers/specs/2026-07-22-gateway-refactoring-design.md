@@ -55,7 +55,7 @@ Docs/QA/
 **적용 흐름 (이슈 #2 예시)**
 1. `PR-002`: "신호 staleness 미탐지" 등록 (SUP.9)
 2. 영향분석: SYS-REQ 중 "시스템 신뢰성 및 고장 진단" 카테고리에 결손 감지 요구사항이 없음을 확인
-3. `CR-002`: SYS1REQ에 신호 결손 감지 요구사항 추가, SWE1REQ에 Signal Monitor 요구사항 추가 (SUP.10, 영향범위: SYS.1/SWE.1/SWE.2/SWE.3/SWE.4)
+3. `CR-002`: SYS1REQ에 신호 결손 감지 요구사항 추가, SWE1REQ에 이를 구현할 SW 요구사항 추가 (구체적인 모듈 설계는 아키텍처 확정 후 결정, SUP.10, 영향범위: SYS.1/SWE.1/SWE.2/SWE.3/SWE.4)
 4. 승인 → 문서/코드 반영 → `TraceabilityMatrix.xlsx`에 CR-002 ↔ SYS-REQ-xx ↔ SWE-REQ-xx ↔ 설계문서 ↔ 코드 ↔ 테스트케이스 연결
 5. `QualityGateChecklist.md` 기준으로 각 단계 산출물이 게이트를 통과했는지 점검
 
